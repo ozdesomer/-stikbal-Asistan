@@ -428,7 +428,7 @@
 <!-- MÜŞTERİ SEPETİ LİSTELEME KATMANI -->
 <div class="detail-page" id="cartPage">
   <div class="detail-header" style="background: var(--blue); color: var(--white);">
-    <button class="back-btn" onclick="document.getElementById('cartPage').classList.remove('open')" style="background: rgba(255,255,255,0.15); color: var(--white);">←</button>
+    <button class="back-btn" onclick="closeCartPage()" style="background: rgba(255,255,255,0.15); color: var(--white);">←</button>
     <div class="detail-header-text">
       <h2 style="color: var(--white);">Müşteri Alışveriş Listesi</h2>
       <p style="color: rgba(255,255,255,0.7);">Sipariş Notları ve Seçilen Modeller</p>
@@ -1159,6 +1159,7 @@ function resetToHome() {
   document.getElementById('productSection').style.display = 'none';
   closeDetail();
   renderMainCategories();
+  history.replaceState({ page: 'home' }, '', '');
 }
 
 function backToCategories() {
@@ -1166,6 +1167,7 @@ function backToCategories() {
   document.getElementById('productSection').style.display = 'none';
   document.getElementById('categorySection').style.display = 'block';
   renderMainCategories();
+  history.replaceState({ page: 'home' }, '', '');
 }
 
 function renderGlobalFloorSwitcher() {
@@ -1220,6 +1222,7 @@ function selectGlobalCategory(catKey) {
   document.getElementById('categorySection').style.display = 'none';
   document.getElementById('productSection').style.display = 'block';
   document.getElementById('productSectionTitle').textContent = CORE_CATEGORIES[catKey].label;
+  history.pushState({ page: 'category', catKey: catKey }, '', '#cat=' + catKey);
 
   const tabContainer = document.getElementById('dynamicFloorTabs');
   tabContainer.innerHTML = '';
@@ -1318,11 +1321,12 @@ function filterByFloor(floorKey) {
   renderAllCategoryProducts(floorKey);
 }
 
-function openDetail(name, catKey) {
+function openDetail(name, catKey, _fromHistory) {
   currentProductKey = productKey(name, catKey, currentFloor);
   const data = products[currentProductKey] || {};
   const floorData = FLOORS[currentFloor];
   if (!floorData) return;
+  if (!_fromHistory) history.pushState({ page: 'detail', name, catKey, floor: currentFloor }, '', '#detail=' + encodeURIComponent(name));
 
   const _set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   _set('detailHeaderName', name);
@@ -1403,7 +1407,13 @@ function openDetail(name, catKey) {
   document.getElementById('editBtn').classList.add('show');
 }
 
-function closeDetail() { document.getElementById('detailPage').classList.remove('open'); document.getElementById('editBtn').classList.remove('show'); }
+function closeDetail(fromPopstate) {
+  document.getElementById('detailPage').classList.remove('open');
+  document.getElementById('editBtn').classList.remove('show');
+  if (!fromPopstate && history.state && history.state.page === 'detail') {
+    history.back();
+  }
+}
 
 function openAddToCartModal() {
   document.getElementById('cart_product_name').textContent = document.getElementById('detailHeaderName').textContent;
@@ -1419,6 +1429,7 @@ function confirmAddToCart() {
 }
 
 function openCart() {
+  history.pushState({ page: 'cart' }, '', '#cart');
   const container = document.getElementById('cartItemsList');
   container.innerHTML = '';
   if (!cart.length) {
@@ -1502,6 +1513,52 @@ function handleSearch() {
 
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200); }
 
+
+// ── BROWSER GERİ TUŞU DESTEĞİ ──────────────────────────────────────
+window.addEventListener('popstate', function(e) {
+  const state = e.state || {};
+  const page = state.page || 'home';
+
+  // Önce tüm overlay'leri kapat (popstate=true ile, tekrar history.back() tetiklenmesin)
+  document.getElementById('detailPage').classList.remove('open');
+  document.getElementById('editBtn').classList.remove('show');
+  document.getElementById('cartPage').classList.remove('open');
+  document.getElementById('addPage').classList.remove('open');
+  document.getElementById('cartNotePage').classList.remove('open');
+
+  if (page === 'detail') {
+    // Ürün detayına geri dön
+    currentFloor = state.floor || currentFloor;
+    currentCategory = state.catKey || currentCategory;
+    openDetail(state.name, state.catKey, true);
+    // ama bu openDetail tekrar pushState yapmasın — özel bayrak
+    return;
+  }
+
+  if (page === 'category') {
+    // Kategori listesine dön
+    currentCategory = state.catKey;
+    document.getElementById('categorySection').style.display = 'none';
+    document.getElementById('productSection').style.display = 'block';
+    document.getElementById('productSectionTitle').textContent = CORE_CATEGORIES[state.catKey] ? CORE_CATEGORIES[state.catKey].label : '';
+    filterByFloor('all');
+    return;
+  }
+
+  // home
+  currentCategory = null;
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResultsSection').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
+  document.getElementById('categorySection').style.display = 'block';
+  document.getElementById('productSection').style.display = 'none';
+  renderMainCategories();
+});
+
+function closeCartPage() {
+  document.getElementById('cartPage').classList.remove('open');
+  if (history.state && history.state.page === 'cart') { history.back(); }
+}
 // Başlat
 loadData();
 renderGlobalFloorSwitcher();
